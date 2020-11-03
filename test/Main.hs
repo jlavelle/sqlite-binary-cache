@@ -18,7 +18,8 @@ import           Data.Vector            (Vector)
 import           Database.SQLite.Simple (Connection, Query (..))
 import qualified Database.SQLite.Simple as Sqlite
 import           NeatInterpolation      (text)
-import           SQLite.BinaryCache     (CacheAction (..), CacheResult(..), FieldType(..), Codec(..))
+import           SQLite.BinaryCache
+    (CacheAction (..), CacheResult (..), Codec (..), FieldType (..))
 import qualified SQLite.BinaryCache     as Cache
 import           Test.Tasty             (TestName, TestTree)
 import qualified Test.Tasty             as Tasty
