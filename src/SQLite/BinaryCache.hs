@@ -8,10 +8,11 @@ import           Control.DeepSeq                  (NFData)
 import qualified Control.Exception
 import           Control.Foldl                    (FoldM (..))
 import qualified Control.Foldl
+import           Data.Bifunctor                   (Bifunctor (..))
 import           Data.ByteString                  (ByteString)
 import           Data.Data                        (Data)
 import qualified Data.Maybe
-import           Data.Profunctor                  (lmap)
+import           Data.Profunctor                  (Profunctor (..))
 import           Data.Text                        (Text)
 import qualified Data.Text                        as Text
 import           Data.Time                        (UTCTime)
@@ -22,6 +23,53 @@ import qualified Database.SQLite.Simple           as Sqlite
 import           Database.SQLite.Simple.FromField (FromField)
 import           GHC.Generics                     (Generic)
 import           NeatInterpolation                (text)
+
+data Codec a b c = Codec
+  { codecEncode :: b -> a
+  , codecDecode :: a -> c
+  }
+  deriving (Generic, NFData, Functor)
+
+instance Profunctor (Codec a) where
+  dimap f g (Codec enc dec) = Codec (enc . f) (g . dec)
+
+invmapCodec :: (a -> x) -> (x -> a) -> Codec a b c -> Codec x b c
+invmapCodec to from (Codec enc dec) = Codec (to . enc) (dec . from)
+
+data CacheResult a b
+  = CacheMiss a
+  | CacheHit UTCTime b
+  deriving (Eq, Ord, Show, Generic, Data, NFData, Functor, Foldable, Traversable)
+
+cacheResult :: (a -> c) -> (UTCTime -> b -> c) -> CacheResult a b -> c
+cacheResult m h = \case
+  CacheMiss a -> m a
+  CacheHit t b  -> h t b
+
+instance Bifunctor CacheResult where
+  bimap f g = cacheResult (CacheMiss . f) (\t -> CacheHit t . g)
+
+withCache
+  :: FilePath
+  -> Text
+  -> Codec ByteString a b
+  -> (Int -> IO a)
+  -> ((Int -> IO (CacheResult a b)) -> IO r)
+  -> IO r
+withCache db table codec fn action =
+  Sqlite.withConnection db $ \conn -> action (cached conn table codec fn)
+
+cached
+  :: Connection
+  -> Text
+  -> Codec ByteString a b
+  -> (Int -> IO a)
+  -> Int
+  -> IO (CacheResult a b)
+cached conn table (Codec enc dec) fn i =
+  lookup conn table i >>= maybe miss (pure . fmap dec . uncurry CacheHit)
+  where
+    miss = fn i >>= \r -> CacheMiss r <$ write conn table i (enc r)
 
 data CacheAction
   = NoAction
@@ -38,9 +86,9 @@ traverseCache_ conn table f = Sqlite.withTransaction conn
   $ foldAllRows conn table (FoldM (const step) (pure ()) pure)
   where
     step r@(i, _, _, _) = f r >>= \case
-      NoAction -> pure ()
+      NoAction          -> pure ()
       Modify bs invalid -> upsert conn table i bs invalid
-      Delete -> delete conn table i
+      Delete            -> delete conn table i
 
 invalidate :: Connection -> Text -> Int -> IO ()
 invalidate conn table i = withCreateTable conn table
@@ -88,11 +136,11 @@ upsert conn table i b invalid = withCreateTable conn table
       , "invalid" := invalid
       ]
 
-lookup :: Connection -> Text -> Int -> IO (Maybe ByteString)
+lookup :: Connection -> Text -> Int -> IO (Maybe (UTCTime, ByteString))
 lookup conn table i = withCreateTable conn table
-  $ fmap (fmap Sqlite.fromOnly . Data.Maybe.listToMaybe)
+  $ fmap Data.Maybe.listToMaybe
   $ Sqlite.queryNamed conn
-      (Query [text| select data from $table where id = :id and invalid = :invalid |])
+      (Query [text| select modified_at, data from $table where id = :id and invalid = :invalid |])
       [ ":id" := i, ":invalid" := False ]
 
 selectRow :: Connection -> Text -> Int -> IO (Maybe (ByteString, Bool, UTCTime))
@@ -116,9 +164,9 @@ selectField conn table field = withCreateTable conn table
 
 withCreateTable :: Connection -> Text -> IO a -> IO a
 withCreateTable conn table action = Control.Exception.try action >>= \case
-  Right a -> pure a
+  Right a                                      -> pure a
   Left (Sqlite.SQLError Sqlite.ErrorError _ _) -> createTable table conn *> action
-  Left e -> Control.Exception.throw e
+  Left e                                       -> Control.Exception.throw e
 
 data FieldType
   = FieldInteger
@@ -130,9 +178,9 @@ data FieldType
 renderFieldType :: FieldType -> Text
 renderFieldType = \case
   FieldInteger -> "integer"
-  FieldReal -> "real"
-  FieldText -> "text"
-  FieldBlob -> "blob"
+  FieldReal    -> "real"
+  FieldText    -> "text"
+  FieldBlob    -> "blob"
 
 createTable :: Text -> Connection -> IO ()
 createTable table conn = Sqlite.execute_ conn $ mkTableQuery table
