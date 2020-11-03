@@ -1,0 +1,66 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: cf96208a383e89ef7cf9dd2b954022cec9bf4740ffe4b39ae4449bd1639e99cb
+
+name:           sqlite-binary-cache
+version:        0.1.0.0
+homepage:       https://github.com/jlavelle/sqlite-binary-cache#readme
+bug-reports:    https://github.com/jlavelle/sqlite-binary-cache/issues
+author:         John Lavelle
+maintainer:     jlavelle604@gmail.com
+copyright:      2020 John Lavelle
+license:        MIT
+build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/jlavelle/sqlite-binary-cache
+
+library
+  exposed-modules:
+      SQLite.BinaryCache
+  other-modules:
+      Paths_sqlite_binary_cache
+  hs-source-dirs:
+      src
+  default-extensions: ApplicativeDo BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveAnyClass DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveGeneric DeriveLift DeriveTraversable DerivingStrategies DerivingVia EmptyCase ExistentialQuantification FlexibleContexts FlexibleInstances FunctionalDependencies GADTs GeneralizedNewtypeDeriving InstanceSigs KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns OverloadedStrings PatternSynonyms RankNTypes ScopedTypeVariables StandaloneDeriving TupleSections TypeApplications TypeFamilies TypeFamilyDependencies TypeOperators ViewPatterns
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+  build-depends:
+      base >=4.13 && <4.14
+    , bytestring
+    , deepseq
+    , foldl
+    , neat-interpolation
+    , profunctors
+    , sqlite-simple
+    , text
+    , time
+    , vector
+  default-language: Haskell2010
+
+test-suite sqlite-binary-cache-test
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+      Paths_sqlite_binary_cache
+  hs-source-dirs:
+      test
+  default-extensions: ApplicativeDo BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveAnyClass DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveGeneric DeriveLift DeriveTraversable DerivingStrategies DerivingVia EmptyCase ExistentialQuantification FlexibleContexts FlexibleInstances FunctionalDependencies GADTs GeneralizedNewtypeDeriving InstanceSigs KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns OverloadedStrings PatternSynonyms RankNTypes ScopedTypeVariables StandaloneDeriving TupleSections TypeApplications TypeFamilies TypeFamilyDependencies TypeOperators ViewPatterns
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.13 && <4.14
+    , bytestring
+    , deepseq
+    , foldl
+    , neat-interpolation
+    , profunctors
+    , sqlite-binary-cache
+    , sqlite-simple
+    , text
+    , time
+    , vector
+  default-language: Haskell2010

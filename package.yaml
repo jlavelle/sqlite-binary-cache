@@ -56,7 +56,12 @@ ghc-options:
 dependencies:
   - base >=4.13 && <4.14
   - bytestring
+  - deepseq
+  - foldl
+  - neat-interpolation
+  - profunctors
   - sqlite-simple
+  - text
   - time
   - vector
 
