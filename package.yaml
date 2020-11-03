@@ -78,3 +78,7 @@ tests:
       - -with-rtsopts=-N
     dependencies:
       - sqlite-binary-cache
+      - containers
+      - tasty
+      - tasty-golden
+      - tasty-hunit

@@ -127,13 +127,13 @@ upsert conn table i b invalid = withCreateTable conn table
         values (:id, :data, :invalid, datetime('now'))
         on conflict (id) do update
         set data = excluded.data,
-            modified_at = excluded.modified_at
+            modified_at = excluded.modified_at,
             invalid = excluded.invalid
       |]
     params =
       [ ":id" := i
       , ":data" := b
-      , "invalid" := invalid
+      , ":invalid" := invalid
       ]
 
 lookup :: Connection -> Text -> Int -> IO (Maybe (UTCTime, ByteString))
@@ -193,7 +193,7 @@ mkTableQuery :: Text -> [(Text, FieldType)] -> Query
 mkTableQuery table fieldSpec =
   let fields = toFieldDefs fieldSpec
   in Query [text|
-       create table if not exists $table(
+       create table if not exists $table (
          id integer primary key,
          $fields
        )
@@ -203,7 +203,7 @@ invalidateQueryFragment :: Text -> Text
 invalidateQueryFragment table =
   [text|
     update $table
-    set invalid = :invalid
+    set invalid = :invalid,
         modified_at = datetime('now')
   |]
 

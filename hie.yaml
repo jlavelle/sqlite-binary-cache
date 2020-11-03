@@ -2,3 +2,5 @@ cradle:
   cabal:
     - path: "src"
       component: "lib:sqlite-binary-cache"
+    - path: "test"
+      component: "test:sqlite-binary-cache-test"
