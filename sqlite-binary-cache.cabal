@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3f1bcfc7d93ce76fe86c8ad881f4f9149cd760bfbce7ad50297010e63539ae1b
+-- hash: d1425409df8bd249161d2507a5c169c5b3eaf1d0efcfffde17485698fb596aa8
 
 name:           sqlite-binary-cache
-version:        0.1.0.0
+version:        0.2.0.0
 homepage:       https://github.com/jlavelle/sqlite-binary-cache#readme
 bug-reports:    https://github.com/jlavelle/sqlite-binary-cache/issues
 author:         John Lavelle
@@ -23,6 +23,7 @@ source-repository head
 library
   exposed-modules:
       SQLite.BinaryCache
+      SQLite.BinaryCache.FieldType
   other-modules:
       Paths_sqlite_binary_cache
   hs-source-dirs:
