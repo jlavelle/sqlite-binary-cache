@@ -55,6 +55,7 @@ data Cache i = Cache
   { cacheConn  :: Connection
   , cacheTable :: Text
   }
+  deriving Generic
 
 withCache
   :: forall i a b r
@@ -125,7 +126,7 @@ delete :: ToFieldType i => Cache i -> i -> IO ()
 delete (Cache conn table) i =
   Sqlite.executeNamed conn (Query [text| delete from $table where id = :id |]) [ ":id" := i ]
 
-upsert :: forall i. ToFieldType i => Cache i -> i -> ByteString -> Bool -> IO ()
+upsert :: ToFieldType i => Cache i -> i -> ByteString -> Bool -> IO ()
 upsert cache@(Cache conn table) i b invalid = withCreateTable cache
   $ Sqlite.executeNamed conn query params
   where
@@ -144,7 +145,7 @@ upsert cache@(Cache conn table) i b invalid = withCreateTable cache
       , ":invalid" := invalid
       ]
 
-lookup :: forall i. ToFieldType i => Cache i -> i -> IO (Maybe (UTCTime, ByteString))
+lookup :: ToFieldType i => Cache i -> i -> IO (Maybe (UTCTime, ByteString))
 lookup cache@(Cache conn table) i = withCreateTable cache
   $ fmap Data.Maybe.listToMaybe
   $ Sqlite.queryNamed conn
