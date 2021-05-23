@@ -4,17 +4,19 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f9b3981d222806677fb474c18a213329179b30e8820a7337153ae8cfbf6fb7ea
+-- hash: 09d41b28885318e30cdc1676789748d5d42152cea0decb08f881e944ce80f16b
 
 name:           sqlite-binary-cache
-version:        0.2.1.0
+version:        0.3.0.0
 homepage:       https://github.com/jlavelle/sqlite-binary-cache#readme
 bug-reports:    https://github.com/jlavelle/sqlite-binary-cache/issues
-author:         John Lavelle
+author:         John C. Lavelle
 maintainer:     jlavelle604@gmail.com
-copyright:      2020 John Lavelle
+copyright:      2021 John C. Lavelle
 license:        MIT
 build-type:     Simple
+extra-source-files:
+    test/mkTableQuery.golden
 
 source-repository head
   type: git

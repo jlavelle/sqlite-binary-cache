@@ -12,8 +12,6 @@ import           Data.Text                        (Text)
 import qualified Data.Text.Lazy                   as LT
 import           Data.Time                        (Day, UTCTime)
 import           Data.Word                        (Word16, Word32, Word64, Word8)
-import           Database.SQLite.Simple.FromField (FromField)
-import           Database.SQLite.Simple.ToField   (ToField)
 import           GHC.Generics                     (Generic)
 
 data FieldType
@@ -31,7 +29,7 @@ render = \case
   FieldBlob    -> "blob"
 
 -- | Gives the SQLite column type for a type @a@
-class (FromField a, ToField a) => ToFieldType a where
+class ToFieldType a where
   toFieldType :: FieldType
 
 instance ToFieldType Bool where

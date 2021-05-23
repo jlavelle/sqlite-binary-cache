@@ -3,7 +3,6 @@
 module Main where
 
 import qualified Control.Foldl
-import qualified Data.Bool
 import           Data.ByteString        (ByteString)
 import qualified Data.ByteString.Lazy   as LBS
 import           Data.Foldable          (traverse_)
@@ -19,13 +18,18 @@ import           Database.SQLite.Simple (Query (..))
 import qualified Database.SQLite.Simple as Sqlite
 import           NeatInterpolation      (text)
 import           SQLite.BinaryCache
-    (Cache (..), CacheAction (..), CacheResult (..), Codec (..), FieldType (..))
+    (Cache (..),  CacheResult (..), FieldType (..), Validity(..), TableName(..), Cached(..))
 import qualified SQLite.BinaryCache     as Cache
 import           Test.Tasty             (TestName, TestTree)
 import qualified Test.Tasty             as Tasty
 import qualified Test.Tasty.Golden      as Golden
 import           Test.Tasty.HUnit       (Assertion)
 import qualified Test.Tasty.HUnit       as HUnit
+
+data CacheAction
+  = NoAction
+  | Modify ByteString Validity
+  | Delete
 
 main :: IO ()
 main = do
@@ -34,14 +38,14 @@ main = do
 withCache :: (Cache Int -> IO a) -> IO a
 withCache action = Sqlite.withConnection ":memory:" $ \conn -> action (Cache conn testTable)
 
-testTable :: Text
+testTable :: TableName
 testTable = "table1"
 
-testRecs :: [(Int, ByteString, Bool)]
+testRecs :: [(Int, ByteString, Validity)]
 testRecs =
-  [ (1, "foo", False)
-  , (2, "bar", False)
-  , (3, "baz", True)
+  [ (1, "foo", Valid)
+  , (2, "bar", Valid)
+  , (3, "baz", Invalid)
   ]
 
 setupTestDb :: Cache Int -> IO ()
@@ -49,6 +53,7 @@ setupTestDb cache@(Cache conn _) = do
   Cache.createTable cache
   traverse_ go testRecs
   where
+    table = getTestTable testTable
     go (a, b, c) = do
       Cache.upsert cache a b c
       Sqlite.execute_ conn query
@@ -56,7 +61,7 @@ setupTestDb cache@(Cache conn _) = do
     -- using a threadDelay
     query = Query
       [text|
-        update $testTable
+        update $table
         set modified_at = datetime('now', '-10 seconds')
         where id = 1
       |]
@@ -79,32 +84,30 @@ unitTests = Tasty.testGroup "Unit tests"
         assertSameElems rs [1, 2, 3]
 
     , dbTestCase "foldAllRows" $ \cache -> do
-        rs <- Cache.foldAllRows cache
-                $ Control.Foldl.generalize
-                $ Control.Foldl.list
-        assertSameElems testRecs (fmap tup4Init rs)
+        rs <- Cache.foldAllRows cache $ Control.Foldl.generalize Control.Foldl.list
+        assertSameElems testRecs (toTup3 <$> rs)
 
     , dbTestCase "selectRow" $ \cache -> do
         Just rs <- sequenceA <$> traverse (Cache.selectRow cache) [1, 2, 3]
-        assertSameElems (fmap tup3Tail testRecs) (fmap tup3Init rs)
+        assertSameElems testRecs (toTup3 <$> rs)
 
     , dbTestCase "lookup" $ \cache -> do
         mrs <- testTableLookup cache
-        assertSameElems (fmap (\(_,b,i) -> Data.Bool.bool (Just b) Nothing i) testRecs) mrs
+        assertSameElems (fmap (\(_,b,i) -> Cache.validity Nothing (Just b) i) testRecs) mrs
     ]
 
   , Tasty.testGroup "inserts"
     [ dbTestCase "upsert - new" $ \cache -> do
-        Cache.upsert cache 999 "quux" False
-        Just (_, bs) <- Cache.lookup cache 999
+        Cache.upsert cache 999 "quux" Valid
+        Just bs <- fmap cachedData <$> Cache.lookup cache 999
         HUnit.assertEqual "" "quux" bs
 
     , dbTestCase "upsert - existing" $ \cache -> do
-        Just (oldTime, _) <- Cache.lookup cache 1
-        Cache.upsert cache 1 "foo2" True
-        Just (newFoo, invalid, newTime) <- Cache.selectRow cache 1
+        Just oldTime <- fmap cachedModifiedAt <$> Cache.lookup cache 1
+        Cache.upsert cache 1 "foo2" Invalid
+        Just (Cached _ newFoo newTime validity) <- Cache.selectRow cache 1
         HUnit.assertEqual "data updated" "foo2" newFoo
-        HUnit.assertBool "Is invalid" invalid
+        HUnit.assertBool "Is invalid" (validity == Invalid)
         HUnit.assertBool "modified_at is newer" $ newTime > oldTime
     ]
 
@@ -136,51 +139,25 @@ unitTests = Tasty.testGroup "Unit tests"
         assertSameElems [Nothing, Nothing, Just "bar"] mrs
     ]
 
-  , Tasty.testGroup "traverseCache_"
-    [ dbTestCase "NoAction does nothing" $ \cache -> do
-        Cache.traverseCache_ cache (const (pure NoAction))
-        rs <- testTableRows cache
-        assertSameElems testRecs rs
-
-    , dbTestCase "Can Modify elements" $ \cache -> do
-        let modify _ = Modify "modded" False
-        Cache.traverseCache_ cache (pure . modify)
-        rs <- testTableRows cache
-        assertSameElems (applyCacheAction modify testRecs) rs
-
-    , dbTestCase "Can Delete elements" $ \cache -> do
-        Cache.traverseCache_ cache (const (pure Delete))
-        rs <- testTableRows cache
-        assertSameElems [] rs
-
-    , dbTestCase "Can combine different actions" $ \cache -> do
-        let modify i | i == 1 = NoAction
-                     | i == 2 = Modify "new" False
-                     | otherwise = Delete
-        Cache.traverseCache_ cache (\(i,_,_,_) -> pure $ modify i)
-        rs <- testTableRows cache
-        assertSameElems (applyCacheAction modify testRecs) rs
-    ]
-
   , Tasty.testGroup "cached"
     [ dbTestCase "CacheHit for existing data" $ \cache -> do
-        Just (_,foo) <- Cache.lookup cache 1
-        CacheHit _ x <- Cache.cached cache (Codec id id) (const $ pure "nope") 1
-        HUnit.assertEqual "" foo x
+        Just foo <- Cache.lookup cache 1
+        CacheHit _ x <- Cache.cached cache id id mempty 1
+        HUnit.assertEqual "" (cachedData foo) x
 
     , dbTestCase "CacheMiss for new data" $ \cache -> do
-        r <- Cache.cached cache (Codec id id) (const $ pure "miss") 999
-        HUnit.assertEqual "" (CacheMiss "miss") r
+        r <- Cache.cached cache id id mempty 999
+        HUnit.assertEqual "" CacheMiss r
 
     , dbTestCase "Inserts new data when there is a miss" $ \cache -> do
-        Cache.cached cache (Codec id id) (const $ pure "miss") 999
+        Cache.cached cache id id (const $ pure "miss") 999
         rs <- testTableRows cache
-        assertSameElems ((999, "miss", False) : testRecs) rs
+        assertSameElems ((999, "miss", Valid) : testRecs) rs
 
     , dbTestCase "upserts when old data is invalid" $ \cache -> do
-        Cache.cached cache (Codec id id) (const $ pure "newbaz") 3
+        Cache.cached cache id id (const $ pure "newbaz") 3
         rs <- testTableRows cache
-        let modify i | i == 3 = Modify "newbaz" False
+        let modify i | i == 3 = Modify "newbaz" Valid
                      | otherwise = NoAction
         assertSameElems (applyCacheAction modify testRecs) rs
     ]
@@ -207,14 +184,17 @@ assertSameElems f g = HUnit.assertEqual "" (setFromFoldable f) (setFromFoldable 
 setFromFoldable :: (Ord a, Foldable f) => f a -> Set a
 setFromFoldable = Set.fromList . Data.Foldable.toList
 
-testTableRows :: Cache Int -> IO (Vector (Int, ByteString, Bool))
-testTableRows cache = fmap tup4Init <$> Cache.selectAllRows cache
+testTableRows :: Cache Int -> IO (Vector (Int, ByteString, Validity))
+testTableRows = (fmap . fmap) toTup3 . Cache.selectAllRows
+
+toTup3 :: Cached i -> (i, ByteString, Validity)
+toTup3 (Cached i d _ v) = (i, d, v)
 
 testTableLookup :: Cache Int -> IO [Maybe ByteString]
 testTableLookup cache =
-  (fmap . fmap) snd <$> traverse (\(i,_,_) -> Cache.lookup cache i) testRecs
+  (fmap . fmap) cachedData <$> traverse (\(i,_,_) -> Cache.lookup cache i) testRecs
 
-applyCacheAction :: (Int -> CacheAction) -> [(Int, ByteString, Bool)] -> [(Int, ByteString, Bool)]
+applyCacheAction :: (Int -> CacheAction) -> [(Int, ByteString, Validity)] -> [(Int, ByteString, Validity)]
 applyCacheAction f = Data.Maybe.mapMaybe go
   where
     go x@(i, _, _) = case f i of
