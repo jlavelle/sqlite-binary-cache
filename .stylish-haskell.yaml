@@ -117,7 +117,7 @@ steps:
       # - none: Do not perform any alignment.
       #
       # Default: global.
-      align: global
+      align: group
 
       # The following options affect only import list alignment.
       #
@@ -199,7 +199,7 @@ steps:
       #   >     )
       #
       # Default: inline
-      long_list_align: new_line
+      long_list_align: multiline
 
       # Align empty list (importing instances)
       #
@@ -223,7 +223,7 @@ steps:
       #   Useful for 'file' and 'group' align settings.
       #
       # Default: 4
-      list_padding: 4
+      list_padding: 2
 
       # Separate lists option affects formatting of import list for type
       # or class. The only difference is single space between type and list
@@ -240,7 +240,7 @@ steps:
       #   > import Data.Foldable (Foldable(fold, foldl, foldMap))
       #
       # Default: true
-      separate_lists: true
+      separate_lists: false
 
       # Space surround option affects formatting of import lists on a single
       # line. The only difference is single space after the initial
@@ -305,7 +305,7 @@ steps:
       # Language prefix to be used for pragma declaration, this allows you to
       # use other options non case-sensitive like "language" or "Language".
       # If a non correct String is provided, it will default to: LANGUAGE.
-      language_prefix: Language
+      language_prefix: LANGUAGE
 
   # Replace tabs by spaces. This is disabled by default.
   # - tabs:

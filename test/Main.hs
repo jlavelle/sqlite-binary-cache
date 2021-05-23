@@ -1,4 +1,4 @@
-{-# Language QuasiQuotes #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Main where
 
@@ -14,17 +14,25 @@ import           Data.Text              (Text)
 import qualified Data.Text.Encoding     as Text
 import qualified Data.Time              as Time
 import           Data.Vector            (Vector)
-import           Database.SQLite.Simple (Query (..))
+import           Database.SQLite.Simple (Query(..))
 import qualified Database.SQLite.Simple as Sqlite
 import           NeatInterpolation      (text)
+
+import           Test.Tasty        (TestName, TestTree)
+import qualified Test.Tasty        as Tasty
+import qualified Test.Tasty.Golden as Golden
+import           Test.Tasty.HUnit  (Assertion)
+import qualified Test.Tasty.HUnit  as HUnit
+
 import           SQLite.BinaryCache
-    (Cache (..),  CacheResult (..), FieldType (..), Validity(..), TableName(..), Cached(..))
-import qualified SQLite.BinaryCache     as Cache
-import           Test.Tasty             (TestName, TestTree)
-import qualified Test.Tasty             as Tasty
-import qualified Test.Tasty.Golden      as Golden
-import           Test.Tasty.HUnit       (Assertion)
-import qualified Test.Tasty.HUnit       as HUnit
+  ( Cache(..)
+  , CacheResult(..)
+  , Cached(..)
+  , FieldType(..)
+  , TableName(..)
+  , Validity(..)
+  )
+import qualified SQLite.BinaryCache as Cache
 
 data CacheAction
   = NoAction
@@ -73,8 +81,9 @@ unitTests :: TestTree
 unitTests = Tasty.testGroup "Unit tests"
   [ Tasty.testGroup "withCreateTable"
     [ dbTestCase "Creates tables when they don't exist" $ \(Cache conn _) -> do
-        Cache.withCreateTable (Cache @Int conn "some_table")
-          $ Sqlite.execute_ conn "select * from some_table"
+        Cache.withCreateTable
+          (Cache @Int conn "some_table")
+          (Sqlite.execute_ conn "select * from some_table")
         Sqlite.execute_ conn "select * from some_table"
     ]
 
@@ -169,7 +178,7 @@ goldenVsText n p t = Golden.goldenVsString n p (pure $ LBS.fromStrict $ Text.enc
 
 goldenTests :: TestTree
 goldenTests = Tasty.testGroup "Golden tests"
-  [ goldenVsText "mkTableQuery" "test/mkTableQuery.golden"
+  [   goldenVsText "mkTableQuery" "test/mkTableQuery.golden"
     $ Sqlite.fromQuery $ Cache.mkTableQuery "test" FieldInteger
         [ ("textf", FieldText)
         , ("integerf", FieldInteger)
@@ -202,11 +211,3 @@ applyCacheAction f = Data.Maybe.mapMaybe go
       Modify bs' b' -> Just (i, bs', b')
       Delete        -> Nothing
 
-tup4Init :: (a, b, c, d) -> (a, b, c)
-tup4Init (a, b, c, _) = (a, b, c)
-
-tup3Init :: (a, b, c) -> (a, b)
-tup3Init (a, b, _) = (a, b)
-
-tup3Tail :: (a, b, c) -> (b, c)
-tup3Tail (_, b, c) = (b, c)

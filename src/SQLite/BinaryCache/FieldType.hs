@@ -1,18 +1,18 @@
-{-# Language AllowAmbiguousTypes #-}
-{-# Language CPP                 #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP                 #-}
 
 module SQLite.BinaryCache.FieldType where
 
-import           Control.DeepSeq                  (NFData)
-import           Data.ByteString                  (ByteString)
-import qualified Data.ByteString.Lazy             as LBS
-import           Data.Data                        (Data)
-import           Data.Int                         (Int16, Int32, Int64, Int8)
-import           Data.Text                        (Text)
-import qualified Data.Text.Lazy                   as LT
-import           Data.Time                        (Day, UTCTime)
-import           Data.Word                        (Word16, Word32, Word64, Word8)
-import           GHC.Generics                     (Generic)
+import           Control.DeepSeq      (NFData)
+import           Data.ByteString      (ByteString)
+import qualified Data.ByteString.Lazy as LBS
+import           Data.Data            (Data)
+import           Data.Int             (Int16, Int32, Int64, Int8)
+import           Data.Text            (Text)
+import qualified Data.Text.Lazy       as LT
+import           Data.Time            (Day, UTCTime)
+import           Data.Word            (Word16, Word32, Word64, Word8)
+import           GHC.Generics         (Generic)
 
 data FieldType
   = FieldInteger

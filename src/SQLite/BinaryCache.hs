@@ -1,16 +1,16 @@
-{-# Language QuasiQuotes #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module SQLite.BinaryCache (module SQLite.BinaryCache, module FieldType) where
 
-import           Prelude                          hiding (lookup)
+import Prelude hiding (lookup)
 
 import           Control.Arrow                    ((&&&))
 import           Control.DeepSeq                  (NFData)
 import qualified Control.Exception
-import           Control.Foldl                    (FoldM (..))
+import           Control.Foldl                    (FoldM(..))
 import qualified Control.Foldl
-import           Data.ByteString                  (ByteString)
 import qualified Data.Bool
+import           Data.ByteString                  (ByteString)
 import           Data.Data                        (Data)
 import qualified Data.Maybe
 import           Data.Profunctor                  (lmap)
@@ -20,14 +20,20 @@ import qualified Data.Text                        as Text
 import           Data.Time                        (UTCTime)
 import           Data.Vector                      (Vector)
 import           Database.SQLite.Simple
-    (Connection, FromRow, NamedParam ((:=)), Query (..), ToRow)
+  ( Connection
+  , FromRow
+  , NamedParam((:=))
+  , Query(..)
+  , ToRow
+  )
 import qualified Database.SQLite.Simple           as Sqlite
 import           Database.SQLite.Simple.FromField (FromField(..))
 import           Database.SQLite.Simple.ToField   (ToField(..))
 import           GHC.Generics                     (Generic)
 import           NeatInterpolation                (text)
-import           SQLite.BinaryCache.FieldType     (FieldType (..), ToFieldType (..))
-import qualified SQLite.BinaryCache.FieldType     as FieldType
+
+import           SQLite.BinaryCache.FieldType (FieldType(..), ToFieldType(..))
+import qualified SQLite.BinaryCache.FieldType as FieldType
 
 data CacheResult a
   = CacheMiss
@@ -88,8 +94,8 @@ withCache
   -> ((i -> IO (CacheResult b)) -> IO r)
   -> IO r
 withCache db table enc dec fn action =
-  Sqlite.withConnection db
-    $ \conn -> action $ cached (Cache @i conn table) enc dec fn
+    Sqlite.withConnection db
+  $ \conn -> action $ cached (Cache @i conn table) enc dec fn
 
 cached
   :: CacheKey i
@@ -99,24 +105,23 @@ cached
   -> (i -> IO a)
   -> i
   -> IO (CacheResult b)
-cached cache enc dec fn i =
-  lookup cache i
-    >>= maybe
-          (fn i >>= \r -> CacheMiss <$ write cache i (enc r))
-          (pure . fmap dec . uncurry CacheHit . (cachedModifiedAt &&& cachedData))
+cached cache enc dec fn i = lookup cache i >>= maybe mkCacheMiss mkCacheHit
+  where
+    mkCacheMiss = fn i >>= \r -> CacheMiss <$ write cache i (enc r)
+    mkCacheHit  = pure . fmap dec . uncurry CacheHit . (cachedModifiedAt &&& cachedData)
 
 invalidate :: CacheKey i => Cache i -> i -> IO ()
 invalidate cache@(Cache conn table) i =
-  withCreateTable cache
-    $ Sqlite.executeNamed conn query params
+    withCreateTable cache
+  $ Sqlite.executeNamed conn query params
   where
     query = Query (validityQueryFragment table <> "\nwhere id = :id")
     params = [ ":id" := i, ":validity" := Invalid ]
 
 invalidateOlderThan :: CacheKey i => Cache i -> UTCTime -> IO ()
 invalidateOlderThan cache@(Cache conn table) t =
-  withCreateTable cache
-    $ Sqlite.executeNamed conn query params
+    withCreateTable cache
+  $ Sqlite.executeNamed conn query params
   where
     query = Query (validityQueryFragment table <> "\nwhere modified_at < :datetime")
     params = [ ":datetime" := t, ":validity" := Invalid ]
@@ -138,8 +143,8 @@ delete (Cache conn (TableName table)) i =
 
 upsert :: CacheKey i => Cache i -> i -> ByteString -> Validity -> IO ()
 upsert cache@(Cache conn (TableName table)) i b v =
-  withCreateTable cache
-    $ Sqlite.executeNamed conn query params
+    withCreateTable cache
+  $ Sqlite.executeNamed conn query params
   where
     query = Query
       [text|
@@ -158,49 +163,49 @@ upsert cache@(Cache conn (TableName table)) i b v =
 
 lookup :: CacheKey i => Cache i -> i -> IO (Maybe (Cached i))
 lookup cache@(Cache conn table) i =
-  withCreateTable cache
-    $ fmap Data.Maybe.listToMaybe
-    $ Sqlite.queryNamed conn
-        (Query $ selectQueryFragment table <> "\nwhere id = :id and validity = :validity")
-        [ ":id" := i, ":validity" := Valid ]
+    withCreateTable cache
+  $ fmap Data.Maybe.listToMaybe
+  $ Sqlite.queryNamed conn
+      (Query $ selectQueryFragment table <> "\nwhere id = :id and validity = :validity")
+      [ ":id" := i, ":validity" := Valid ]
 
 selectRow :: CacheKey i => Cache i -> i -> IO (Maybe (Cached i))
 selectRow cache@(Cache conn table) i =
-  withCreateTable cache
-    $ fmap Data.Maybe.listToMaybe
-    $ Sqlite.queryNamed conn
-        (Query $ selectQueryFragment table <> "\nwhere id = :id")
-        [ ":id" := i ]
+    withCreateTable cache
+  $ fmap Data.Maybe.listToMaybe
+  $ Sqlite.queryNamed conn
+      (Query $ selectQueryFragment table <> "\nwhere id = :id")
+      [ ":id" := i ]
 
 selectAllRows :: CacheKey i => Cache i -> IO (Vector (Cached i))
 selectAllRows cache = foldAllRows cache Control.Foldl.vectorM
 
 foldAllRows :: CacheKey i => Cache i -> FoldM IO (Cached i) b -> IO b
 foldAllRows cache@(Cache conn (TableName table)) f =
-  withCreateTable cache
-    $ fold_ conn (Query [text| select id, data, modified_at, validity from $table |]) f
+    withCreateTable cache
+  $ fold_ conn (Query [text| select id, data, modified_at, validity from $table |]) f
 
 selectField :: (CacheKey i, FromField a) => Cache i -> Text -> IO (Vector a)
 selectField cache@(Cache conn (TableName table)) field =
-  withCreateTable cache
-    $ fold_ conn (Query [text| select $field from $table |])
-    $ lmap Sqlite.fromOnly Control.Foldl.vectorM
+    withCreateTable cache
+  $ fold_ conn (Query [text| select $field from $table |])
+  $ lmap Sqlite.fromOnly Control.Foldl.vectorM
 
 withCreateTable :: CacheKey i => Cache i -> IO a -> IO a
 withCreateTable cache action = Control.Exception.try action >>= \case
   Right a -> pure a
   Left e  -> case e of
     (Sqlite.SQLError Sqlite.ErrorError _ _) -> createTable cache *> action
-    _ -> Control.Exception.throw e
+    _                                       -> Control.Exception.throw e
 
 createTable :: forall i. CacheKey i => Cache i -> IO ()
 createTable (Cache conn table) =
-  Sqlite.execute_ conn
-    $ mkTableQuery table (toFieldType @i)
-        [ ("data", FieldBlob)
-        , ("validity", FieldInteger)
-        , ("modified_at", FieldText)
-        ]
+    Sqlite.execute_ conn
+  $ mkTableQuery table (toFieldType @i)
+      [ ("data", FieldBlob)
+      , ("validity", FieldInteger)
+      , ("modified_at", FieldText)
+      ]
 
 mkTableQuery :: TableName -> FieldType -> [(Text, FieldType)] -> Query
 mkTableQuery (TableName table) pkType fieldSpec =
@@ -230,11 +235,12 @@ selectQueryFragment (TableName table) =
 
 toFieldDefs :: [(Text, FieldType)] -> Text
 toFieldDefs =
-  Text.intercalate ",\n"
+    Text.intercalate ",\n"
   . fmap
-    (\(name, sqlData) ->
-      let sqlName = FieldType.render sqlData
-      in [text| $name $sqlName not null |])
+      ( \(name, sqlData) ->
+          let sqlName = FieldType.render sqlData
+          in [text| $name $sqlName not null |]
+      )
 
 -- Versions of Database.SQLite.Simple.fold* that work with Folds from Control.Foldl
 
