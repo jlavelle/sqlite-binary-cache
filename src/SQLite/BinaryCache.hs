@@ -84,18 +84,12 @@ instance FromField Validity where
 type CacheKey i = (ToFieldType i, ToField i, FromField i)
 
 withCache
-  :: forall i a b r
-   . CacheKey i
-  => FilePath
+  :: forall i a
+   . FilePath
   -> TableName
-  -> (a -> ByteString)
-  -> (ByteString -> b)
-  -> (i -> IO a)
-  -> ((i -> IO (CacheResult b)) -> IO r)
-  -> IO r
-withCache db table enc dec fn action =
-    Sqlite.withConnection db
-  $ \conn -> action $ cached (Cache @i conn table) enc dec fn
+  -> (Cache i -> IO a)
+  -> IO a
+withCache db table fn = Sqlite.withConnection db $ \conn -> fn (Cache @i conn table)
 
 cached
   :: CacheKey i
